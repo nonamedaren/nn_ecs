@@ -1,0 +1,55 @@
+input {
+        beats {
+                port => 5044
+        }
+        tcp {
+                port => 50000
+        }
+}
+
+filter {
+        grok {
+        # Typical NN Issue Log is as follows (v3.2)
+        # <70>1 2022-07-29T21:30:41.692Z - NonameSecurity - - - BOM {JSONDATA}
+                match => { "message" => "\<%{DATA}\>%{DATA} %{TIMESTAMP_ISO8601:timestamp} - NonameSecurity - - - BOM %{GREEDYDATA:jsonData}" }
+        }
+        json {
+                source => "jsonData"
+        }
+        mutate {
+                add_field => {
+                        [server][domain] => "%{host}",
+                        [url][domain] => "%{host}",
+                        [destination][domain] => "%{host}",
+                        [host][domain] => "%{host}",
+                        [host][name] => "%{host}",
+                        [event][kind] => "%{module}",
+                        [event]][kind] => "%{module}",
+                        [event][module] => "%{module}",
+                        [url][path] => "%{path}"
+                }
+#               rename => [ "host", "apiHost" ]
+                rename => {
+                        "host" => "apiHost"
+                }
+                remove_field => [ "message", "jsonData" ]
+                split => ["link","/"]
+                add_field => { [observer][name] => "%{[link][2]}" }
+        }
+        if [severity] == "LOW" {
+                mutate { add_field => { [event][severity] => 0 }
+        }
+        if [severity] == "MEDIUM" {
+                mutate { add_field => { [event][severity] => 1 }
+        }
+        if [severity] == "HIGH" {
+                mutate { add_field => { [event][severity] => 2 }
+        }
+}
+output {
+        elasticsearch {
+                hosts => "elasticsearch:9200"
+                user => "logstash_internal"
+                password => "${LOGSTASH_INTERNAL_PASSWORD}"
+        }
+}
